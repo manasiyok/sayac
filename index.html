@@ -612,7 +612,9 @@ function stateOf(ratio, limit) {
 function ratios(r, basis, prev) {
   const it = r.items || [];
   const A = actv(it), I = nv(it, "5.8.0"), C = nv(it, "8.8.0");
-  const out = {basis, hasReactive: I != null || C != null, dA: null, dI: null, dC: null, ind: null, cap: null, reason: ""};
+  const histOnly = I == null && C == null && (nv(it, "5.8.0*1") != null || nv(it, "8.8.0*1") != null);
+  const out = {basis, hasReactive: I != null || C != null || histOnly, histOnly, dA: null, dI: null, dC: null, ind: null, cap: null, reason: ""};
+  if (histOnly) { out.reason = "Bu okuma yalnız geçmiş dönemleri içeriyor. Bu dönemin oranı için Hızlı veya Tam okuma yapın."; return out; }
   if (!out.hasReactive) { out.reason = "Bu sayaç reaktif enerji göndermiyor."; return out; }
   let A0, I0, C0;
   if (basis === "period") { A0 = actv(it, "*1"); I0 = nv(it, "5.8.0*1"); C0 = nv(it, "8.8.0*1");
@@ -652,6 +654,7 @@ function meterDate(items) {
 function warningsOf(r, E) {
   const w = [], it = r.items || [];
   if (r.partial) w.push(["w", r.partial]);
+  if (r.auto) w.push(["i", `Kutu okumayı otomatik uyarladı: ${r.auto}.`]);
   if (r.cut) w.push(["w", "Sayaç veri gönderirken bağlantı yarıda kesildi; gelen kısım kaydedildi. Eksik değer varsa tekrar okuyun (probun kımıldamadığından emin olun)."]);
   if (r.trunc) w.push(["w", "Sayaç verisi çok uzundu, sonu kısaltıldı. Endeksler ve oranlar etkilenmez."]);
   const ff = val(it, "F.F.0") ?? val(it, "F.F");
@@ -1082,13 +1085,13 @@ async function sendStep() {
 }
 const stepTag = () => seq.length > 1 ? `${seqIdx + 1}/${seq.length} ${seq[seqIdx] === "7" ? "geçmiş" : "anlık"}: ` : "";
 function toPart(j) {
-  return {serial: String(j.serial || ""), ident: String(j.ident || ""), mode: String(j.mode || ""), baud: j.baud, bcc: j.bcc !== false, trunc: !!j.trunc, cut: !!j.cut,
+  return {serial: String(j.serial || ""), ident: String(j.ident || ""), mode: String(j.mode || ""), baud: j.baud, bcc: j.bcc !== false, trunc: !!j.trunc, cut: !!j.cut, auto: String(j.auto || ""),
     items: Array.isArray(j.items) ? j.items : parseObis(String(j.raw || "")), raw: String(j.raw || ""), boxId: j.id};
 }
 function mergeParts(a, b) {
   const have = new Set(a.items.map(x => normCode(x[0])));
   const short = m => String(m).replace(/\s*\(\d\)\s*$/, "");
-  return {...a, serial: a.serial || b.serial, ident: a.ident || b.ident, bcc: a.bcc && b.bcc, trunc: a.trunc || b.trunc, cut: a.cut || b.cut,
+  return {...a, serial: a.serial || b.serial, ident: a.ident || b.ident, bcc: a.bcc && b.bcc, trunc: a.trunc || b.trunc, cut: a.cut || b.cut, auto: [a.auto, b.auto].filter(Boolean).join("; "),
     items: a.items.concat(b.items.filter(x => !have.has(normCode(x[0])))),
     raw: a.raw + "\n# " + b.mode + "\n" + b.raw, mode: `${short(a.mode)} + ${short(b.mode)}`};
 }
@@ -1128,7 +1131,8 @@ function readFail(title, msg) {
 async function onResult(j) {
   const part = toPart(j);
   partial = partial ? mergeParts(partial, part) : part;
-  if (seqIdx < seq.length - 1) {
+  const gotFull = /^Tam/.test(part.mode);          // kutu Tam okumaya geçtiyse geçmiş adımına gerek yok
+  if (seqIdx < seq.length - 1 && !gotFull) {
     seqIdx++; setSteps(1);
     $("#rdDetail").textContent = stepTag() + "sayaçla yeni oturum açılıyor...";
     clearTimeout(readTimer);
@@ -1143,7 +1147,7 @@ async function saveReading(p) {
   const sel = $("#rdStation").value;
   let stationId = sel !== "auto" ? sel : null;
   if (!stationId && j.serial) { const m = STATIONS.find(s => s.serial && (s.serial === j.serial || j.serial.endsWith(s.serial))); if (m) stationId = m.id; }
-  const r = {id: uid(), ts: nowLocal(), stationId, serial: j.serial, ident: j.ident, mode: j.mode, baud: j.baud, bcc: j.bcc, trunc: !!j.trunc, cut: !!j.cut, partial: j.partial || null,
+  const r = {id: uid(), ts: nowLocal(), stationId, serial: j.serial, ident: j.ident, mode: j.mode, baud: j.baud, bcc: j.bcc, trunc: !!j.trunc, cut: !!j.cut, auto: j.auto || "", partial: j.partial || null,
     items: j.items, raw: j.raw, note: "", photo: null, geo: null, demo: Dev.kind === "demo", boxId: j.boxId};
   partial = null;
   await DB.put("readings", r);
@@ -1239,8 +1243,9 @@ function openResult(id, push, fresh) {
     ${w.length ? `<div class="card"><h3 style="margin-bottom:10px">Uyarılar</h3><ul class="warns">${w.map(([k, t]) => `<li class="${k}">${k === "i" ? ICON.info : ICON.over}<span>${esc(t)}</span></li>`).join("")}</ul></div>` : ""}
     <div class="card"><h3 style="margin-bottom:10px">Endeksler</h3><div class="idx">
       ${V("1.8.0", "Toplam aktif", "kWh", true)}${V("1.8.1", "T1 gündüz", "kWh")}${V("1.8.2", "T2 puant", "kWh")}${V("1.8.3", "T3 gece", "kWh")}
-      ${val(it, "5.8.0") != null ? V("5.8.0", "Reaktif endüktif", "kvarh") : `<div><span class="k">Reaktif endüktif</span><span class="small muted">Ölçülmüyor</span></div>`}
-      ${val(it, "8.8.0") != null ? V("8.8.0", "Reaktif kapasitif", "kvarh") : `<div><span class="k">Reaktif kapasitif</span><span class="small muted">Ölçülmüyor</span></div>`}
+      ${val(it, "5.8.0") != null ? V("5.8.0", "Reaktif endüktif", "kvarh") : `<div><span class="k">Reaktif endüktif</span><span class="small muted">${E.R.histOnly ? "Bu okumada yok" : "Ölçülmüyor"}</span></div>`}
+      ${val(it, "8.8.0") != null ? V("8.8.0", "Reaktif kapasitif", "kvarh") : `<div><span class="k">Reaktif kapasitif</span><span class="small muted">${E.R.histOnly ? "Bu okumada yok" : "Ölçülmüyor"}</span></div>`}
+      ${E.R.histOnly ? `<p class="small muted wide" style="grid-column:1/-1">Geçmiş (7) okuması güncel endeksleri içermez; değerler yukarıdaki aylık tabloda.</p>` : ""}
       ${V("1.6.0", "Maksimum demant", "kW", true)}</div></div>
     <div class="card stack">
       <h3>Not, fotoğraf, konum</h3>
