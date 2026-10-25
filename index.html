@@ -652,6 +652,7 @@ function meterDate(items) {
 function warningsOf(r, E) {
   const w = [], it = r.items || [];
   if (r.partial) w.push(["w", r.partial]);
+  if (r.cut) w.push(["w", "Sayaç veri gönderirken bağlantı yarıda kesildi; gelen kısım kaydedildi. Eksik değer varsa tekrar okuyun (probun kımıldamadığından emin olun)."]);
   if (r.trunc) w.push(["w", "Sayaç verisi çok uzundu, sonu kısaltıldı. Endeksler ve oranlar etkilenmez."]);
   const ff = val(it, "F.F.0") ?? val(it, "F.F");
   if (ff != null && /[1-9a-fA-F]/.test(String(ff))) w.push(["i", "Sayacın durum kaydında (F.F.0) işaretli bit var. Anlamı üreticiye göre değişir; sayaç ekranında uyarı simgesi olup olmadığına bakın."]);
@@ -669,7 +670,7 @@ function warningsOf(r, E) {
       if (L.cap != null && L.cap > E.lim.cap && E.sCap !== "over") w.push(["w", `Son okumadan bu yana kapasitif oran ${pct(L.cap)}. Pompalar dururken devrede kalan kondansatör olabilir.`]);
     }
   }
-  if (r.bcc === false) w.push(["e", "Okuma doğrulaması (BCC) hatalı. Değerler şüpheli, tekrar okuyun."]);
+  if (r.bcc === false && !r.cut) w.push(["e", "Okuma doğrulaması (BCC) hatalı. Değerler şüpheli, tekrar okuyun."]);
   return w;
 }
 
@@ -1081,13 +1082,13 @@ async function sendStep() {
 }
 const stepTag = () => seq.length > 1 ? `${seqIdx + 1}/${seq.length} ${seq[seqIdx] === "7" ? "geçmiş" : "anlık"}: ` : "";
 function toPart(j) {
-  return {serial: String(j.serial || ""), ident: String(j.ident || ""), mode: String(j.mode || ""), baud: j.baud, bcc: j.bcc !== false, trunc: !!j.trunc,
+  return {serial: String(j.serial || ""), ident: String(j.ident || ""), mode: String(j.mode || ""), baud: j.baud, bcc: j.bcc !== false, trunc: !!j.trunc, cut: !!j.cut,
     items: Array.isArray(j.items) ? j.items : parseObis(String(j.raw || "")), raw: String(j.raw || ""), boxId: j.id};
 }
 function mergeParts(a, b) {
   const have = new Set(a.items.map(x => normCode(x[0])));
   const short = m => String(m).replace(/\s*\(\d\)\s*$/, "");
-  return {...a, serial: a.serial || b.serial, ident: a.ident || b.ident, bcc: a.bcc && b.bcc, trunc: a.trunc || b.trunc,
+  return {...a, serial: a.serial || b.serial, ident: a.ident || b.ident, bcc: a.bcc && b.bcc, trunc: a.trunc || b.trunc, cut: a.cut || b.cut,
     items: a.items.concat(b.items.filter(x => !have.has(normCode(x[0])))),
     raw: a.raw + "\n# " + b.mode + "\n" + b.raw, mode: `${short(a.mode)} + ${short(b.mode)}`};
 }
@@ -1104,6 +1105,7 @@ function onStatus(j) {
   else if (j.st === "done") { setSteps(4); $("#rdDetail").textContent = "Sonuç aktarılıyor..."; }
 }
 function errTitle(m) {
+  if (/anlaşılmayan/i.test(m)) return "Sayaçtan anlaşılmayan cevap geldi";
   if (/cevap gelmedi/i.test(m)) return "Sayaçtan cevap gelmedi";
   if (/NAK|reddetti|desteklemiyor/i.test(m)) return "Sayaç bu okuma tipini desteklemiyor";
   if (/yarıda/i.test(m)) return "Veri yarıda kesildi";
@@ -1117,7 +1119,7 @@ function readFail(title, msg) {
   const cur = $("#rdSteps .now"); if (cur) { cur.classList.remove("now"); cur.classList.add("fail"); }
   endRead();
   const tip = /desteklemiyor/.test(title) ? `<button class="btn" id="tipTam" style="margin-top:10px">Tam okuma ile dene</button>` : "";
-  const body = msg.startsWith(title) ? msg.slice(title.length).replace(/^[.\s]+/, "") : msg;
+  const body = msg.startsWith(title) ? msg.slice(title.length).replace(/^[.:\s]+/, "").replace(/^\((.*?)\)\.?\s*/, (m0, g) => g.charAt(0).toUpperCase() + g.slice(1) + ". ") : msg;
   $("#rdError").innerHTML = `<b>${esc(title)}</b>${esc(body)}${tip}`;
   $("#rdError").classList.remove("hidden");
   $("#rdError").scrollIntoView({behavior: "smooth", block: "center"});
@@ -1141,7 +1143,7 @@ async function saveReading(p) {
   const sel = $("#rdStation").value;
   let stationId = sel !== "auto" ? sel : null;
   if (!stationId && j.serial) { const m = STATIONS.find(s => s.serial && (s.serial === j.serial || j.serial.endsWith(s.serial))); if (m) stationId = m.id; }
-  const r = {id: uid(), ts: nowLocal(), stationId, serial: j.serial, ident: j.ident, mode: j.mode, baud: j.baud, bcc: j.bcc, trunc: !!j.trunc, partial: j.partial || null,
+  const r = {id: uid(), ts: nowLocal(), stationId, serial: j.serial, ident: j.ident, mode: j.mode, baud: j.baud, bcc: j.bcc, trunc: !!j.trunc, cut: !!j.cut, partial: j.partial || null,
     items: j.items, raw: j.raw, note: "", photo: null, geo: null, demo: Dev.kind === "demo", boxId: j.boxId};
   partial = null;
   await DB.put("readings", r);
@@ -1249,7 +1251,7 @@ function openResult(id, push, fresh) {
     </div>
     <div class="card"><dl class="kv num">
       <dt>Sayaç</dt><dd>${esc(r.ident || "—")}</dd><dt>Okuma tipi</dt><dd>${esc(r.mode || "—")}${r.baud ? `, ${esc(r.baud)} baud` : ""}</dd>
-      <dt>Doğrulama</dt><dd>${r.bcc ? "BCC doğru" : "BCC hatalı"}</dd><dt>Sayaç saati</dt><dd>${esc([val(it, "0.9.2"), val(it, "0.9.1")].filter(Boolean).join(" ") || "—")}</dd></dl></div>
+      <dt>Doğrulama</dt><dd>${r.cut ? "Yarıda kesildi" : r.bcc ? "BCC doğru" : "BCC hatalı"}</dd><dt>Sayaç saati</dt><dd>${esc([val(it, "0.9.2"), val(it, "0.9.1")].filter(Boolean).join(" ") || "—")}</dd></dl></div>
     <div class="card"><details class="fold"><summary>Tüm veriler (${it.filter(x => !isEmptyHist(x)).length})</summary>
       ${it.some(isEmptyHist) ? `<p class="small muted" style="margin:6px 0">${it.filter(isEmptyHist).length} boş geçmiş kaydı gizlendi.</p>` : ""}
       <table class="obis num">${it.filter(x => !isEmptyHist(x)).map(([k, v]) => { const d = obisDesc(k); return `<tr><td>${esc(k)}${d ? `<small>${esc(d)}</small>` : ""}</td><td>${esc(v)}</td></tr>`; }).join("")}</table></details>
@@ -1464,7 +1466,7 @@ function buildXlsx(rs) {
       Nm(nv(it, "1.8.0")), Nm(nv(it, "1.8.1")), Nm(nv(it, "1.8.2")), Nm(nv(it, "1.8.3")), Nm(nv(it, "5.8.0")), Nm(nv(it, "8.8.0")), Nm(nv(it, "1.6.0")),
       Tx(E.R.hasReactive ? (E.basis === "period" ? "Fatura dönemi" : "Son okumadan beri") : ""), Nm(E.R.dA), Nm(E.R.dI), Nm(E.R.dC), Pc(E.R.ind), Pc(E.R.cap),
       {v: E.lim.ind, t: "n"}, {v: E.lim.cap, t: "n"}, Tx(STATUS_TEXT[E.overall]), Tx(w.map(x => x[1]).join(" / ")), Tx(r.note),
-      r.geo ? {v: +r.geo.lat.toFixed(6), t: "n"} : null, r.geo ? {v: +r.geo.lon.toFixed(6), t: "n"} : null, Tx(r.bcc ? "BCC doğru" : "BCC hatalı"), Tx(r.demo ? "Evet" : "")]);
+      r.geo ? {v: +r.geo.lat.toFixed(6), t: "n"} : null, r.geo ? {v: +r.geo.lon.toFixed(6), t: "n"} : null, Tx(r.cut ? "Yarıda kesildi" : r.bcc ? "BCC doğru" : "BCC hatalı"), Tx(r.demo ? "Evet" : "")]);
   }
   const rows2 = [["Tarih", "Seri no", "İstasyon", "OBIS kodu", "Açıklama", "Değer"].map(H)];
   for (const r of rs) { const st = STATIONS.find(s => s.id === r.stationId); for (const [k, v] of (r.items || []).filter(x => !isEmptyHist(x))) rows2.push([Dt(r.ts), Tx(r.serial), Tx(st ? st.name : ""), Tx(k), Tx(obisDesc(k)), Tx(v)]); }
