@@ -206,6 +206,11 @@ nav.tabs .center span.ic{width:48px;height:48px;border-radius:16px;background:va
   max-height:90vh;overflow:auto;display:flex;flex-direction:column;gap:12px}
 .toast{position:fixed;left:16px;right:16px;bottom:calc(var(--nav-h) + env(safe-area-inset-bottom) + 16px);z-index:70;max-width:528px;margin:0 auto;
   background:var(--ink);color:var(--surface);border-radius:var(--r-md);padding:12px 16px;font-weight:600;box-shadow:0 6px 20px rgba(0,0,0,.25)}
+.ytot{margin-top:12px;padding:12px;border-radius:10px;background:var(--surface2);display:grid;gap:8px}
+.ytot-g{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}
+.ytot-g>div{display:grid;gap:2px;min-width:0;align-content:start}
+.ytot-g .k{font-size:12px;color:var(--muted)}
+.ytot-g .v{font-weight:700;font-size:17px}
 </style>
 </head>
 <body>
@@ -1178,15 +1183,36 @@ function histChart(H, lim) {
     ${limLine(lim.ind, "var(--accent)", "end. sınır")}${limLine(lim.cap, "var(--warn)", "kap. sınır", true)}${line("ind", "var(--accent)")}${line("cap", "var(--warn)")}${xl}</svg>
     <div class="legend"><span><i style="background:var(--accent)"></i>Endüktif</span><span><i style="background:var(--warn)"></i>Kapasitif</span><span>içi boş nokta: süren dönem</span></div>`;
 }
+// Geçmiş tablosundaki tüm dönemlerin toplamı (süren dönem dahil)
+function histTotal(H) {
+  const sum = f => H.every(h => h[f] != null) ? H.reduce((a, h) => a + h[f], 0) : null;
+  const dA = sum("dA"), dI = sum("dI"), dC = sum("dC");
+  const done = H.filter(h => !h.current);
+  return {n: H.length, from: H[H.length - 1].label, hasCurrent: H.some(h => h.current), dA, dI, dC,
+    ind: dA > 0 && dI != null ? dI / dA * 100 : null, cap: dA > 0 && dC != null ? dC / dA * 100 : null,
+    avg: done.length ? done.reduce((a, h) => a + h.dA, 0) / done.length : null};
+}
 function histCard(H, lim, title) {
   if (H.length < 2) return "";
+  const T = histTotal(H);
   const cell = (v, l) => v == null ? `<td class="muted">—</td>` : `<td class="t-${stateOf(v, l)}" style="text-align:right;font-weight:700">${pct(v)}</td>`;
   return `<div class="card"><h3>${title || "Dönem dönem oranlar"}</h3>
     <p class="small muted" style="margin:4px 0 8px">Sayacın sakladığı dönem sonu değerlerinden hesaplandı. Sınırlar: endüktif %${lim.ind}, kapasitif %${lim.cap}.</p>
     ${histChart(H, lim)}
+    <div class="ytot">
+      <div class="small muted">${esc(T.from)} – bugün, ${T.n} dönem toplamı</div>
+      <div class="ytot-g">
+        <div><span class="k">Aktif</span><span class="v num">${fmtNum(T.dA, 0)} <small>kWh</small></span></div>
+        <div><span class="k">Endüktif</span><span class="v num">${T.dI != null ? fmtNum(T.dI, 0) : "—"} <small>kvarh</small></span><span class="num t-${stateOf(T.ind, lim.ind)}" style="font-weight:700">${T.ind != null ? pct(T.ind) : ""}</span></div>
+        <div><span class="k">Kapasitif</span><span class="v num">${T.dC != null ? fmtNum(T.dC, 0) : "—"} <small>kvarh</small></span><span class="num t-${stateOf(T.cap, lim.cap)}" style="font-weight:700">${T.cap != null ? pct(T.cap) : ""}</span></div>
+        <div><span class="k">Aylık ortalama</span><span class="v num">${T.avg != null ? fmtNum(T.avg, 0) : "—"} <small>kWh</small></span></div>
+      </div>
+      <div class="small muted">Yıllık oranlar bilgi içindir; ceza her fatura dönemi için ayrı değerlendirilir.</div>
+    </div>
     <details class="fold" style="margin-top:10px"><summary class="small">Dönem tablosu (${H.length})</summary>
     <table class="obis num"><tr><td class="small muted">Dönem</td><td class="small muted" style="text-align:right">Aktif kWh</td><td class="small muted" style="text-align:right">End.</td><td class="small muted" style="text-align:right">Kap.</td></tr>
-    ${H.map(h => `<tr><td>${esc(h.label)}${h.current ? `<small>devam ediyor</small>` : ""}</td><td style="text-align:right">${fmtNum(h.dA, 1)}</td>${cell(h.ind, lim.ind)}${cell(h.cap, lim.cap)}</tr>`).join("")}</table></details></div>`;
+    ${H.map(h => `<tr><td>${esc(h.label)}${h.current ? `<small>devam ediyor</small>` : ""}</td><td style="text-align:right">${fmtNum(h.dA, 1)}</td>${cell(h.ind, lim.ind)}${cell(h.cap, lim.cap)}</tr>`).join("")}
+    <tr style="border-top:2px solid var(--line)"><td><b>Toplam</b></td><td style="text-align:right"><b>${fmtNum(T.dA, 1)}</b></td>${cell(T.ind, lim.ind)}${cell(T.cap, lim.cap)}</tr></table></details></div>`;
 }
 function scaleHtml(ratio, limit, state) {
   const max = Math.max(limit * 1.6, (ratio || 0) * 1.08, 5);
@@ -1484,6 +1510,8 @@ function buildXlsx(rs) {
     const st = STATIONS.find(s => s.id === r.stationId), l = limitsFor(st);
     for (const h of Hs) { const sI = h.ind != null ? stateOf(h.ind, l.ind) : "na", sC = h.cap != null ? stateOf(h.cap, l.cap) : "na";
       rowsH.push([Tx(st ? st.name : ""), Tx(r.serial), Dt(r.ts), Tx(h.label), Tx(h.current ? "Evet" : ""), Nm(h.dA), Nm(h.dI), Nm(h.dC), Pc(h.ind), Pc(h.cap), {v: l.ind, t: "n"}, {v: l.cap, t: "n"}, Tx(STATUS_TEXT[worst(sI, sC)])]); }
+    if (Hs.length > 1) { const T = histTotal(Hs);
+      rowsH.push([Tx(st ? st.name : ""), Tx(r.serial), Dt(r.ts), Tx(`Toplam: ${T.from} – okuma (${T.n} dönem)`), Tx(""), Nm(T.dA), Nm(T.dI), Nm(T.dC), Pc(T.ind), Pc(T.cap), {v: l.ind, t: "n"}, {v: l.cap, t: "n"}, Tx("Bilgi (ceza dönemlik)")]); }
   }
   const rows3 = [["İstasyon", "Abone no", "Seri no", "Kurulu güç (kVA)", "Endüktif sınır %", "Kapasitif sınır %", "Not"].map(H)];
   for (const s of STATIONS) { const l = limitsFor(s); rows3.push([Tx(s.name), Tx(s.sub), Tx(s.serial), s.kva ? {v: +s.kva, t: "n"} : null, {v: l.ind, t: "n"}, {v: l.cap, t: "n"}, Tx(s.note)]); }
