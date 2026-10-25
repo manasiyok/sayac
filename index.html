@@ -400,6 +400,8 @@ html.has-bg body{background:transparent!important}
       <h2>Kestirme ve Apple Watch okumaları</h2>
       <p class="small muted">Kestirmeler uygulamasıyla (Siri, Apple Watch, kilit ekranı) yapılan okumalar kutuda birikir. Kutuya Bluetooth ile bağlıyken buradan uygulamaya aktarın.</p>
       <button class="btn block" id="boxImport">Kutudaki okumaları aktar</button>
+      <button class="btn block" id="boxImportAll" style="font-size:14px">Eksikleri yeniden aktar</button>
+      <p class="small muted" style="margin:0">Yanlış aktarılan kayıtları Kayıtlar'dan silip "Eksikleri yeniden aktar"a basarsanız kutudan yeniden alınır; uygulamada zaten olanlar tekrar eklenmez.</p>
       <p class="small muted" id="boxImportInfo"></p>
     </div>
     <div class="card stack">
@@ -440,7 +442,7 @@ html.has-bg body{background:transparent!important}
 
 <script>
 "use strict";
-const APP_VERSION = "1.8";
+const APP_VERSION = "1.9";
 
 /* =====================================================================
    Yardımcılar
@@ -1605,16 +1607,23 @@ function devRequest(cmd, ev, ms = 15000) {
   });
 }
 const boxTs = t => { const m = String(t || "").match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?/); return m ? `${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:${m[6] || "00"}` : ""; };
+// Kutunun saati yok: zaman gönderilmediyse sayacın kendi tarih/saatini (0.9.2 / 0.9.1) kullan
+function meterTs(items) {
+  const d = String(val(items, "0.9.2") || "").match(/(\d{2})-(\d{2})-(\d{2})/), t = String(val(items, "0.9.1") || "").match(/(\d{2}):(\d{2}):?(\d{2})?/);
+  return d && t ? `20${d[1]}-${d[2]}-${d[3]}T${t[1]}:${t[2]}:${t[3] || "00"}` : "";
+}
 let importing = false;
-async function importBox() {
+async function importBox(all = false) {
   if (importing) return;
   if (!Dev.connected || Dev.kind !== "ble") { toast("Önce kutuya Bluetooth ile bağlanın."); return; }
   if (reading) { toast("Okuma sürerken aktarılamaz."); return; }
   importing = true;
   const btn = $("#boxImport"); if (btn) { btn.disabled = true; btn.textContent = "Kutu kayıtları okunuyor..."; }
   try {
-    const list = await devRequest("L|" + (S.lastBoxId || 0), "list");
-    if (!Array.isArray(list) || !list.length) { toast("Kutuda aktarılacak yeni okuma yok."); return; }
+    const have = new Set(READINGS.flatMap(r => r.boxIds || []));
+    const list0 = await devRequest("L|" + (all ? 0 : (S.lastBoxId || 0)), "list");
+    const list = Array.isArray(list0) ? list0.filter(x => !have.has(x[0])) : [];
+    if (!list.length) { toast("Kutuda aktarılacak yeni okuma yok."); if (Array.isArray(list0) && list0.length) { S.lastBoxId = Math.max(S.lastBoxId || 0, ...list0.map(x => x[0])); await saveSettings(); } return; }
     const recs = [];
     for (let i = 0; i < list.length; i++) {
       const [id, ts, note, serial, mode] = list[i];
@@ -1625,7 +1634,13 @@ async function importBox() {
     }
     // aynı anda (aynı zaman damgasıyla) yapılan Anlık + Geçmiş okumalarını tek kayıtta birleştir
     const groups = [];
-    for (const r of recs) { const g = groups[groups.length - 1]; if (g && r.ts && g[0].ts === r.ts) g.push(r); else groups.push([r]); }
+    // aynı zaman damgası ya da arka arkaya gelen Anlık → Geçmiş kayıtları aynı okumadır (kestirmenin Hızlı okuması)
+    for (const r of recs) {
+      const g = groups[groups.length - 1], last = g && g[g.length - 1];
+      const sameTs = g && r.ts && g[0].ts === r.ts;
+      const pair = last && /^Anlık/.test(last.mode) && /^Geçmiş/.test(r.mode) && r.id === last.id + 1;
+      if (sameTs || pair) g.push(r); else groups.push([r]);
+    }
     let n = 0;
     for (const g of groups) {
       const parts = g.map(x => ({serial: x.serial, ident: x.ident || "", mode: x.mode, baud: x.baud, bcc: true, trunc: false, cut: false, auto: "",
@@ -1633,7 +1648,7 @@ async function importBox() {
       const p = parts.reduce((a, b) => mergeParts(a, b));
       const serial = p.serial || (val(p.items, "0.0.0") || val(p.items, "96.1.0") || "");
       const st = serial ? STATIONS.find(s => s.serial && (s.serial === serial || serial.endsWith(s.serial))) : null;
-      const r = {id: uid(), ts: boxTs(g[0].ts) || nowLocal(), stationId: st ? st.id : null, serial, ident: p.ident, mode: p.mode, baud: p.baud,
+      const r = {id: uid(), ts: boxTs(g[0].ts) || meterTs(p.items) || nowLocal(), boxIds: g.map(x => x.id), stationId: st ? st.id : null, serial, ident: p.ident, mode: p.mode, baud: p.baud,
         bcc: true, trunc: false, cut: false, auto: "", partial: null, items: p.items, raw: p.raw,
         note: g[0].note === "Kestirme" ? "Kestirme ile okundu" : (g[0].note || ""), photo: null, geo: null, demo: false, boxId: p.boxId};
       await DB.put("readings", r); READINGS.push(r); n++;
@@ -1646,7 +1661,8 @@ async function importBox() {
   finally { importing = false; if (btn) { btn.disabled = false; btn.textContent = "Kutudaki okumaları aktar"; } renderImportInfo(); }
 }
 function renderImportInfo() { const el = $("#boxImportInfo"); if (el) el.textContent = S.lastBoxId ? `Son aktarılan kutu kaydı #${S.lastBoxId}.` : "Henüz aktarma yapılmadı."; }
-$("#boxImport").onclick = importBox;
+$("#boxImport").onclick = () => importBox(false);
+$("#boxImportAll").onclick = () => importBox(true);
 // Bağlanınca kutuda bekleyen okuma var mı bak
 Dev.on(ev => {
   if (ev !== "info" || Dev.kind !== "ble" || reading || importing) return;
