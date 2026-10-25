@@ -238,7 +238,8 @@ nav.tabs .center span.ic{width:48px;height:48px;border-radius:16px;background:va
 .hn span{font-size:11.5px;color:var(--muted)}
 .hn[aria-pressed="true"]{outline:2px solid var(--ink)}
 .hn.over b{color:var(--bad)} .hn.near b{color:var(--warn)} .hn.ok b{color:var(--ok)}
-.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(158px,1fr));gap:12px}
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(150px,100%),1fr));gap:12px}
+.tiles>.tile{min-width:0;overflow:hidden}
 .tile{position:relative;display:grid;grid-template-rows:auto 1fr auto;gap:8px;min-height:176px;padding:14px;border-radius:24px;
   background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);cursor:pointer;text-align:left;color:var(--ink);min-width:0}
 .tile:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
@@ -251,8 +252,11 @@ nav.tabs .center span.ic{width:48px;height:48px;border-radius:16px;background:va
 .tile-r{display:flex;gap:10px;font-variant-numeric:tabular-nums;font-size:13px}
 .tile-r b{font-size:17px}
 .tile svg.sp{width:100%;height:30px;display:block}
-.tile-bot{display:flex;align-items:center;gap:8px}
-.tile-pill{font-size:12px;font-weight:700;padding:3px 9px;border-radius:999px;background:var(--surface);white-space:nowrap}
+.tile-bot{display:flex;align-items:center;gap:8px;min-width:0}
+.tile-bot>button,.tile-bot>.rb{flex:none}
+.tile-pill{font-size:12px;font-weight:700;padding:3px 9px;border-radius:999px;background:var(--surface);white-space:nowrap;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.tile-bot{justify-content:space-between}.tile-bot>.grow{display:none}
+@media (max-width:400px){.tile{padding:12px}.tile-bot .rb{width:36px;height:36px}.tile-pill{font-size:11.5px;padding:3px 8px}.tile-ic{width:34px;height:34px}.tile-top{gap:8px}}
 .s-over .tile-pill{background:var(--bad);color:#fff} .s-near .tile-pill{background:var(--warn);color:#fff} .s-ok .tile-pill{background:var(--ok);color:#fff}
 .rb{width:42px;height:42px;border-radius:50%;border:none;display:grid;place-items:center;background:var(--ink);color:var(--surface);cursor:pointer;flex:none}
 :root[data-theme="soft"] .rb{color:#fff}
@@ -300,7 +304,7 @@ html.has-bg body{background:transparent!important}
   <!-- İSTASYONLAR -->
   <section class="view" id="v-stations">
     <div class="row">
-      <input class="i grow" id="stSearch" type="search" placeholder="İstasyon, abone veya seri no ara" aria-label="İstasyon ara">
+      <input class="i grow" id="stSearch" type="search" placeholder="İstasyon veya seri no ara" style="min-width:0;text-overflow:ellipsis" aria-label="İstasyon ara">
       <button class="btn primary" id="stAdd" aria-label="İstasyon ekle"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>Ekle</button>
     </div>
     <div id="stHero"></div>
@@ -462,7 +466,7 @@ html.has-bg body{background:transparent!important}
 
 <script>
 "use strict";
-const APP_VERSION = "2.1";
+const APP_VERSION = "2.1.1";
 
 /* =====================================================================
    Yardımcılar
@@ -1054,7 +1058,7 @@ function renderStations() {
   if (!rows.length) { $("#stList").innerHTML = `<div class="card empty" style="grid-column:1/-1"><p>Bu süzgece uyan istasyon yok.</p></div>`; return; }
   $("#stList").innerHTML = rows.map(({st, r, E, status}) => {
     const has = r && E.R.hasReactive && (E.R.ind != null || E.R.cap != null);
-    const pill = !r ? "Okunmadı" : STATUS_TEXT[status];
+    const pill = !r ? "Okunmadı" : ({none: "Reaktif yok", na: "Oran yok"}[status] || STATUS_TEXT[status]);
     return `<div class="tile s-${status}" role="button" tabindex="0" data-id="${esc(st.id)}" aria-label="${esc(st.name)}, ${esc(pill)}">
       <div class="tile-top"><span class="tile-ic">${stIcon(st)}</span><div class="grow" style="min-width:0">
         <div class="tile-name">${esc(st.name)}</div>
@@ -1063,7 +1067,7 @@ function renderStations() {
         ${has ? `<div class="tile-r"><span>End <b class="t-${E.sInd}">${pct(E.R.ind)}</b></span><span>Kap <b class="t-${E.sCap}">${pct(E.R.cap)}</b></span></div>` : ""}
         ${r ? sparkSvg(r, E.lim) : ""}
       </div>
-      <div class="tile-bot"><span class="tile-pill">${esc(pill)}</span><span class="grow"></span>
+      <div class="tile-bot"><span class="tile-pill" title="${esc(r ? STATUS_TEXT[status] : pill)}">${esc(pill)}</span><span class="grow"></span>
         <button class="rb" data-read="${esc(st.id)}" aria-label="${esc(st.name)} oku">${ICO.bolt}</button></div>
     </div>`;
   }).join("");
