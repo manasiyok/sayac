@@ -257,10 +257,18 @@ nav.tabs .center span.ic{width:48px;height:48px;border-radius:16px;background:va
 .rb{width:42px;height:42px;border-radius:50%;border:none;display:grid;place-items:center;background:var(--ink);color:var(--surface);cursor:pointer;flex:none}
 :root[data-theme="soft"] .rb{color:#fff}
 .rb:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+
+/* Arka plan resmi */
+#bgLayer,#bgVeil{position:fixed;inset:0;z-index:-1;pointer-events:none;display:none}
+#bgLayer{background-size:cover;background-position:center}
+#bgVeil{background:var(--bg)}
+html.has-bg #bgLayer,html.has-bg #bgVeil{display:block}
+html.has-bg body{background:transparent!important}
 </style>
 </head>
 <body>
 
+<div id="bgLayer" aria-hidden="true"></div><div id="bgVeil" aria-hidden="true"></div>
 <header class="top" id="top">
   <button class="back" id="backBtn" aria-label="Geri"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 18l-6-6 6-6"/></svg>Geri</button>
   <h1 id="title">İstasyonlar</h1>
@@ -389,10 +397,22 @@ nav.tabs .center span.ic{width:48px;height:48px;border-radius:16px;background:va
       <div><label class="f" for="sNear">"Yaklaşıyor" uyarısı: sınırın yüzde kaçında</label><input class="i num" id="sNear" inputmode="numeric"></div>
     </div>
     <div class="card stack">
+      <h2>Kestirme ve Apple Watch okumaları</h2>
+      <p class="small muted">Kestirmeler uygulamasıyla (Siri, Apple Watch, kilit ekranı) yapılan okumalar kutuda birikir. Kutuya Bluetooth ile bağlıyken buradan uygulamaya aktarın.</p>
+      <button class="btn block" id="boxImport">Kutudaki okumaları aktar</button>
+      <p class="small muted" id="boxImportInfo"></p>
+    </div>
+    <div class="card stack">
       <h2>Görünüm ve deneme</h2>
       <div>
         <label class="f">Tema</label>
         <div class="seg" id="sTheme"><button data-t="auto">Otomatik</button><button data-t="light">Açık</button><button data-t="dark">Koyu</button><button data-t="soft">Yumuşak</button></div>
+      </div>
+      <div class="stack" style="gap:8px">
+        <span class="small muted">Arka plan resmi</span>
+        <div class="row"><label class="btn grow" for="sBgFile" style="justify-content:center">Resim seç</label><input type="file" id="sBgFile" accept="image/*" hidden><button class="btn" id="sBgDel">Kaldır</button></div>
+        <label class="row small" id="sBgDimRow"><span class="muted">Resim</span><input type="range" id="sBgDim" min="20" max="90" step="5" class="grow" aria-label="Resmin üstündeki örtü"><span class="muted">Yazı</span></label>
+        <p class="small muted" style="margin:0">Yazılar okunsun diye resmin üstüne temanın renginde bir örtü konur; kaydırıcıyla ayarlanır. En iyi Yumuşak temayla görünür. Resim yalnızca bu telefonda saklanır.</p>
       </div>
       <label class="row"><input type="checkbox" id="sAwake"> <span class="grow">Kutu bağlıyken ekranı açık tut<br><span class="small muted">Ekran kilitlenince iOS Bluetooth bağlantısını keser. Pil tüketimini biraz artırır.</span></span></label>
       <label class="row"><input type="checkbox" id="sDemo"> <span class="grow">Demo modu<br><span class="small muted">Gerçek kutu yerine sahte bir sayaçla çalışır. Kayıtlar "Demo" olarak işaretlenir.</span></span></label>
@@ -420,7 +440,7 @@ nav.tabs .center span.ic{width:48px;height:48px;border-radius:16px;background:va
 
 <script>
 "use strict";
-const APP_VERSION = "1.6";
+const APP_VERSION = "1.8";
 
 /* =====================================================================
    Yardımcılar
@@ -521,7 +541,7 @@ const DB = {
   clear(store) { if (this.mem) { this.mem[store].clear(); return Promise.resolve(); } return this.tx(store, "readwrite", s => s.clear()); }
 };
 
-const DEFAULTS = {hiInd: 20, hiCap: 15, loInd: 33, loCap: 20, near: 80, theme: "auto", demo: false, keepAwake: true, lastExport: null, lastMode: "67"};
+const DEFAULTS = {hiInd: 20, hiCap: 15, loInd: 33, loCap: 20, near: 80, theme: "auto", demo: false, keepAwake: true, lastExport: null, lastMode: "67", bgDim: 55, lastBoxId: 0};
 let S = {...DEFAULTS};                // ayarlar
 let STATIONS = [], READINGS = [];     // bellekteki kopyalar
 
@@ -815,6 +835,8 @@ const Dev = {
     if (kind === "I") { this.info = j; this.emit("info", j); }
     else if (kind === "S") this.emit("status", j);
     else if (kind === "R") this.emit("result", j);
+    else if (kind === "L") this.emit("list", j);
+    else if (kind === "F") this.emit("rec", j);
   }
 };
 
@@ -1566,12 +1588,95 @@ async function renderSettings() {
   $$("#sTheme button").forEach(b => { b.setAttribute("aria-pressed", b.dataset.t === S.theme); b.onclick = () => { S.theme = b.dataset.t; saveSettings(); applyTheme(); renderSettings(); }; });
   $("#sDemo").checked = !!S.demo;
   $("#sAwake").checked = !!S.keepAwake;
+  $("#sBgDim").value = S.bgDim ?? 55; applyBg(); renderImportInfo();
   $("#expInfo").textContent = S.lastExport ? `Son dışa aktarma: ${fmtDate(S.lastExport)}. Toplam ${READINGS.length} okuma.` : `Henüz dışa aktarma yapılmadı. Toplam ${READINGS.length} okuma.`;
   let est = ""; try { if (navigator.storage && navigator.storage.estimate) { const e = await navigator.storage.estimate(); est = ` Kullanılan alan yaklaşık ${N1.format((e.usage || 0) / 1048576)} MB.`; } } catch (e) {}
   const photos = READINGS.filter(r => r.photo).length;
   $("#storeInfo").textContent = `${STATIONS.length} istasyon, ${READINGS.length} okuma, ${photos} fotoğraf telefonda kayıtlı.${est}`;
   $("#verInfo").textContent = `Uygulama sürümü ${APP_VERSION}${Dev.info ? `, kutu firmware ${Dev.info.fw}` : ""}.`;
 }
+/* ---------- Kutuda biriken (Kestirme/WiFi) okumaları Bluetooth ile aktar ---------- */
+function devRequest(cmd, ev, ms = 15000) {
+  return new Promise((res, rej) => {
+    let off = null;
+    const t = setTimeout(() => { if (off) off(); rej(new Error("zaman aşımı")); }, ms);
+    off = Dev.on((e, d) => { if (e === ev) { clearTimeout(t); off(); res(d); } });
+    Dev.send(cmd).catch(err => { clearTimeout(t); off(); rej(err); });
+  });
+}
+const boxTs = t => { const m = String(t || "").match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?/); return m ? `${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:${m[6] || "00"}` : ""; };
+let importing = false;
+async function importBox() {
+  if (importing) return;
+  if (!Dev.connected || Dev.kind !== "ble") { toast("Önce kutuya Bluetooth ile bağlanın."); return; }
+  if (reading) { toast("Okuma sürerken aktarılamaz."); return; }
+  importing = true;
+  const btn = $("#boxImport"); if (btn) { btn.disabled = true; btn.textContent = "Kutu kayıtları okunuyor..."; }
+  try {
+    const list = await devRequest("L|" + (S.lastBoxId || 0), "list");
+    if (!Array.isArray(list) || !list.length) { toast("Kutuda aktarılacak yeni okuma yok."); return; }
+    const recs = [];
+    for (let i = 0; i < list.length; i++) {
+      const [id, ts, note, serial, mode] = list[i];
+      if (btn) btn.textContent = `Aktarılıyor ${i + 1}/${list.length}...`;
+      let f = null;
+      for (let tr = 0; tr < 2 && !f; tr++) { try { f = await devRequest("F|" + id, "rec", 30000); } catch (e) {} }
+      if (f && !f.err && f.raw) recs.push({id, ts, note, serial, mode, ident: f.ident, raw: f.raw, baud: parseInt(String(f.hdr).split(",")[1]) || null});
+    }
+    // aynı anda (aynı zaman damgasıyla) yapılan Anlık + Geçmiş okumalarını tek kayıtta birleştir
+    const groups = [];
+    for (const r of recs) { const g = groups[groups.length - 1]; if (g && r.ts && g[0].ts === r.ts) g.push(r); else groups.push([r]); }
+    let n = 0;
+    for (const g of groups) {
+      const parts = g.map(x => ({serial: x.serial, ident: x.ident || "", mode: x.mode, baud: x.baud, bcc: true, trunc: false, cut: false, auto: "",
+        items: parseObis(x.raw), raw: x.raw, boxId: x.id}));
+      const p = parts.reduce((a, b) => mergeParts(a, b));
+      const serial = p.serial || (val(p.items, "0.0.0") || val(p.items, "96.1.0") || "");
+      const st = serial ? STATIONS.find(s => s.serial && (s.serial === serial || serial.endsWith(s.serial))) : null;
+      const r = {id: uid(), ts: boxTs(g[0].ts) || nowLocal(), stationId: st ? st.id : null, serial, ident: p.ident, mode: p.mode, baud: p.baud,
+        bcc: true, trunc: false, cut: false, auto: "", partial: null, items: p.items, raw: p.raw,
+        note: g[0].note === "Kestirme" ? "Kestirme ile okundu" : (g[0].note || ""), photo: null, geo: null, demo: false, boxId: p.boxId};
+      await DB.put("readings", r); READINGS.push(r); n++;
+    }
+    READINGS.sort((a, b) => (a.ts < b.ts ? 1 : -1));
+    S.lastBoxId = Math.max(S.lastBoxId || 0, ...list.map(x => x[0])); await saveSettings();
+    toast(n ? `${n} okuma aktarıldı` : "Aktarılacak geçerli okuma bulunamadı.");
+    renderStations();
+  } catch (e) { toast("Aktarma tamamlanamadı: kutu cevap vermedi."); }
+  finally { importing = false; if (btn) { btn.disabled = false; btn.textContent = "Kutudaki okumaları aktar"; } renderImportInfo(); }
+}
+function renderImportInfo() { const el = $("#boxImportInfo"); if (el) el.textContent = S.lastBoxId ? `Son aktarılan kutu kaydı #${S.lastBoxId}.` : "Henüz aktarma yapılmadı."; }
+$("#boxImport").onclick = importBox;
+// Bağlanınca kutuda bekleyen okuma var mı bak
+Dev.on(ev => {
+  if (ev !== "info" || Dev.kind !== "ble" || reading || importing) return;
+  setTimeout(() => { if (reading || importing || !Dev.connected) return;
+    devRequest("L|" + (S.lastBoxId || 0), "list", 8000).then(l => { if (Array.isArray(l) && l.length) toast(`Kutuda ${l.length} yeni okuma var. Ayarlar'dan aktarabilirsiniz.`, 4500); }).catch(() => {}); }, 800);
+});
+let bgUrl = null;
+async function applyBg() {
+  const html = document.documentElement;
+  let m = null; try { m = await DB.get("meta", "bg"); } catch (e) {}
+  if (bgUrl) { URL.revokeObjectURL(bgUrl); bgUrl = null; }
+  if (m && m.v) {
+    bgUrl = URL.createObjectURL(m.v);
+    $("#bgLayer").style.backgroundImage = `url("${bgUrl}")`;
+    $("#bgVeil").style.opacity = (S.bgDim ?? 55) / 100;
+    html.classList.add("has-bg");
+  } else { html.classList.remove("has-bg"); $("#bgLayer").style.backgroundImage = ""; }
+  const del = $("#sBgDel"), row = $("#sBgDimRow");
+  if (del) del.disabled = !(m && m.v);
+  if (row) row.style.display = m && m.v ? "" : "none";
+}
+$("#sBgFile").onchange = async e => {
+  const f = e.target.files && e.target.files[0]; e.target.value = "";
+  if (!f) return;
+  try { const b = await shrinkImage(f, 1800, 0.82); await DB.put("meta", {k: "bg", v: b}); await applyBg(); toast("Arka plan ayarlandı"); }
+  catch (err) { toast("Resim açılamadı."); }
+};
+$("#sBgDel").onclick = async () => { await DB.del("meta", "bg"); await applyBg(); toast("Arka plan kaldırıldı"); };
+$("#sBgDim").oninput = e => { S.bgDim = +e.target.value; $("#bgVeil").style.opacity = S.bgDim / 100; };
+$("#sBgDim").onchange = () => saveSettings();
 $("#sAwake").onchange = e => { S.keepAwake = e.target.checked; saveSettings(); if (S.keepAwake) keepAwake(); else if (!reading) releaseWake(); };
 $("#sDemo").onchange = e => { S.demo = e.target.checked; saveSettings(); if (Dev.connected) Dev.disconnect(); updateConn(); toast(S.demo ? "Demo modu açık" : "Demo modu kapalı"); };
 function applyTheme() { if (S.theme === "auto") document.documentElement.removeAttribute("data-theme"); else document.documentElement.setAttribute("data-theme", S.theme); }
@@ -1714,6 +1819,7 @@ function renderBanner() {
   await loadAll();
   readMode = S.lastMode || "67";
   applyTheme();
+  applyBg();
   renderBanner();
   show("stations");
   updateConn();
