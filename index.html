@@ -442,7 +442,7 @@ html.has-bg body{background:transparent!important}
 
 <script>
 "use strict";
-const APP_VERSION = "1.9";
+const APP_VERSION = "2.0";
 
 /* =====================================================================
    Yardımcılar
@@ -718,6 +718,56 @@ function meterDate(items) {
   if (!dm || !tm) return null;
   return new Date(2000 + +dm[1], dm[2] - 1, +dm[3], +tm[1], +tm[2], +(tm[3] || 0)).getTime();   // YY-AA-GG
 }
+// Anlık şebeke değerleri (Anlık / Hızlı okumada gelir)
+function liveVals(items) {
+  const V = ["32.7.0", "52.7.0", "72.7.0"].map(c => nv(items, c)), I = ["31.7.0", "51.7.0", "71.7.0"].map(c => nv(items, c));
+  const pf = ["33.7.0", "53.7.0", "73.7.0"].map(c => nv(items, c)), f = nv(items, "14.7.0"), pfT = nv(items, "13.7.0");
+  if (V.every(v => v == null) && I.every(v => v == null)) return null;
+  const okV = V.filter(v => v != null), okI = I.filter(v => v != null);
+  const avg = a => a.reduce((x, y) => x + y, 0) / a.length;
+  const live = okV.filter(v => v > 50);
+  const vImb = live.length >= 2 ? (Math.max(...live) - Math.min(...live)) / avg(live) * 100 : null;
+  const iAvg = okI.length ? avg(okI) : null;
+  const iImb = okI.length >= 2 && iAvg >= 1 ? (Math.max(...okI) - Math.min(...okI)) / iAvg * 100 : null;
+  let P = null;
+  if (V.some(v => v != null) && I.some(v => v != null)) P = V.reduce((t, v, k) => t + (v != null && I[k] != null ? v * I[k] * (pf[k] != null ? Math.abs(pf[k]) : 1) : 0), 0) / 1000;
+  return {V, I, pf, f, pfT, vImb, iImb, iAvg, P, missing: V.map((v, k) => v != null && v < 50 ? k + 1 : null).filter(Boolean)};
+}
+function liveWarnings(L) {
+  const w = [];
+  if (!L) return w;
+  if (L.missing.length) w.push(["e", `L${L.missing.join(", L")} fazında gerilim yok. Sigorta, kontaktör veya hat kontrol edilmeli.`]);
+  const lo = L.V.map((v, k) => v != null && v >= 50 && v < 207 ? `L${k + 1} ${N1.format(v)} V` : null).filter(Boolean);
+  const hi = L.V.map((v, k) => v != null && v > 253 ? `L${k + 1} ${N1.format(v)} V` : null).filter(Boolean);
+  if (lo.length) w.push(["w", `Düşük gerilim: ${lo.join(", ")} (alt sınır 207 V).`]);
+  if (hi.length) w.push(["w", `Yüksek gerilim: ${hi.join(", ")} (üst sınır 253 V).`]);
+  if (L.vImb != null && L.vImb > 2) w.push(["w", `Faz gerilimleri arasında %${N1.format(L.vImb)} fark var (motorlar için %2'nin altı önerilir).`]);
+  if (L.iImb != null && L.iImb > 20) w.push(["w", `Faz akımları dengesiz: %${N1.format(L.iImb)} fark. Pompa motoru veya bağlantılar kontrol edilmeli.`]);
+  if (L.f != null && (L.f < 49.5 || L.f > 50.5)) w.push(["i", `Şebeke frekansı ${N1.format(L.f)} Hz (normal 49,5–50,5 Hz).`]);
+  return w;
+}
+function liveCard(it) {
+  const L = liveVals(it); if (!L) return "";
+  const cell = (v, d, cls = "") => `<td class="num ${cls}" style="text-align:right">${v == null ? "—" : (d === 2 ? N1.format(v) : fmtNum(v, d))}</td>`;
+  const vCls = v => v == null ? "" : v < 50 ? "t-over" : (v < 207 || v > 253) ? "t-near" : "";
+  const pfFmt = v => v == null ? "—" : new Intl.NumberFormat("tr-TR", {minimumFractionDigits: 2, maximumFractionDigits: 2}).format(v);
+  const run = L.P == null ? "" : L.P < 0.1 ? "Pompa okuma anında çalışmıyor görünüyor." : `Okuma anında yaklaşık <b>${new Intl.NumberFormat("tr-TR", {maximumFractionDigits: 1}).format(L.P)} kW</b> çekiliyordu.`;
+  return `<div class="card"><h3 style="margin-bottom:4px">Anlık değerler</h3>
+    <p class="small muted" style="margin:0 0 8px">Okuma anındaki ölçüm; sayaç bunların geçmişini tutmaz.</p>
+    <div class="tw" style="overflow-x:auto"><table class="obis num" style="width:100%">
+      <tr><td></td><td class="small muted" style="text-align:right">L1</td><td class="small muted" style="text-align:right">L2</td><td class="small muted" style="text-align:right">L3</td></tr>
+      <tr><td>Gerilim (V)</td>${L.V.map(v => cell(v, 2, vCls(v))).join("")}</tr>
+      <tr><td>Akım (A)</td>${L.I.map(v => cell(v, 2)).join("")}</tr>
+      ${L.pf.some(v => v != null) ? `<tr><td>cos φ</td>${L.pf.map(v => `<td class="num" style="text-align:right">${pfFmt(v)}</td>`).join("")}</tr>` : ""}
+    </table></div>
+    <div class="ytot-g" style="margin-top:10px">
+      ${L.f != null ? `<div><span class="k">Frekans</span><span class="v num">${N1.format(L.f)} <small>Hz</small></span></div>` : ""}
+      ${L.vImb != null ? `<div><span class="k">Gerilim farkı</span><span class="v num ${L.vImb > 2 ? "t-near" : ""}">%${N1.format(L.vImb)}</span></div>` : ""}
+      ${L.iImb != null ? `<div><span class="k">Akım dengesizliği</span><span class="v num ${L.iImb > 20 ? "t-near" : ""}">%${N1.format(L.iImb)}</span></div>` : ""}
+      ${L.P != null ? `<div><span class="k">Anlık güç</span><span class="v num">${new Intl.NumberFormat("tr-TR", {maximumFractionDigits: 2}).format(L.P)} <small>kW</small></span></div>` : ""}
+    </div>
+    ${run ? `<p class="small" style="margin:8px 0 0">${run}</p>` : ""}</div>`;
+}
 function warningsOf(r, E) {
   const w = [], it = r.items || [];
   if (r.partial) w.push(["w", r.partial]);
@@ -726,6 +776,7 @@ function warningsOf(r, E) {
   if (r.trunc) w.push(["w", "Sayaç verisi çok uzundu, sonu kısaltıldı. Endeksler ve oranlar etkilenmez."]);
   const ff = val(it, "F.F.0") ?? val(it, "F.F");
   if (ff != null && /[1-9a-fA-F]/.test(String(ff))) w.push(["i", "Sayacın durum kaydında (F.F.0) işaretli bit var. Anlamı üreticiye göre değişir; sayaç ekranında uyarı simgesi olup olmadığına bakın."]);
+  w.push(...liveWarnings(liveVals(it)));
   const H = monthlyHistory(it).filter(h => !h.current);
   const overs = H.filter(h => (h.ind != null && h.ind > E.lim.ind) || (h.cap != null && h.cap > E.lim.cap));
   if (overs.length) w.push(["w", `Geçmiş dönemlerde sınır aşımı: ${overs.map(h => `${h.label} ${h.ind > E.lim.ind ? `endüktif ${pct(h.ind)}` : `kapasitif ${pct(h.cap)}`}`).join(", ")}.`]);
@@ -1458,6 +1509,7 @@ function openResult(id, push, fresh) {
     ${E.R.hasReactive ? histCard(monthlyHistory(it), E.lim) : ""}
     ${rangeCard(r, E.lim)}
     ${w.length ? `<div class="card"><h3 style="margin-bottom:10px">Uyarılar</h3><ul class="warns">${w.map(([k, t]) => `<li class="${k}">${k === "i" ? ICON.info : ICON.over}<span>${esc(t)}</span></li>`).join("")}</ul></div>` : ""}
+    ${liveCard(it)}
     <div class="card"><h3 style="margin-bottom:10px">Endeksler</h3><div class="idx">
       ${V("1.8.0", "Toplam aktif", "kWh", true)}${V("1.8.1", "T1 gündüz", "kWh")}${V("1.8.2", "T2 puant", "kWh")}${V("1.8.3", "T3 gece", "kWh")}
       ${val(it, "5.8.0") != null ? V("5.8.0", "Reaktif endüktif", "kvarh") : `<div><span class="k">Reaktif endüktif</span><span class="small muted">${E.R.histOnly ? "Bu okumada yok" : "Ölçülmüyor"}</span></div>`}
@@ -1777,7 +1829,7 @@ function buildXlsx(rs) {
   const H = (v) => ({v, s: 1}), Tx = v => ({v}), Nm = v => (v == null || isNaN(v) ? null : {v: +(+v).toFixed(3), t: "n", s: 2}), Pc = v => (v == null || isNaN(v) ? null : {v: +(+v).toFixed(2), t: "n", s: 3});
   const head = ["Tarih", "İstasyon", "Abone no", "Seri no", "Sayaç kimliği", "Okuma tipi", "Toplam aktif 1.8.0 (kWh)", "T1 gündüz (kWh)", "T2 puant (kWh)", "T3 gece (kWh)",
     "Reaktif endüktif 5.8.0 (kvarh)", "Reaktif kapasitif 8.8.0 (kvarh)", "Maks. demant 1.6.0 (kW)", "Oran aralığı", "Aralık aktif (kWh)", "Aralık endüktif (kvarh)", "Aralık kapasitif (kvarh)",
-    "Endüktif oran %", "Kapasitif oran %", "Endüktif sınır %", "Kapasitif sınır %", "Durum", "Uyarılar", "Not", "Enlem", "Boylam", "Doğrulama", "Demo"];
+    "Endüktif oran %", "Kapasitif oran %", "Endüktif sınır %", "Kapasitif sınır %", "Durum", "Uyarılar", "Not", "Enlem", "Boylam", "Doğrulama", "Demo", "L1 V", "L2 V", "L3 V", "L1 A", "L2 A", "L3 A", "cos φ L1", "cos φ L2", "cos φ L3", "Frekans Hz", "Anlık güç kW (yaklaşık)"];
   const rows = [head.map(H)];
   for (const r of rs) {
     const E = evalReading(r), it = r.items || [], w = warningsOf(r, E);
@@ -1785,7 +1837,8 @@ function buildXlsx(rs) {
       Nm(nv(it, "1.8.0")), Nm(nv(it, "1.8.1")), Nm(nv(it, "1.8.2")), Nm(nv(it, "1.8.3")), Nm(nv(it, "5.8.0")), Nm(nv(it, "8.8.0")), Nm(nv(it, "1.6.0")),
       Tx(E.R.hasReactive ? (E.basis === "period" ? "Fatura dönemi" : "Son okumadan beri") : ""), Nm(E.R.dA), Nm(E.R.dI), Nm(E.R.dC), Pc(E.R.ind), Pc(E.R.cap),
       {v: E.lim.ind, t: "n"}, {v: E.lim.cap, t: "n"}, Tx(STATUS_TEXT[E.overall]), Tx(w.map(x => x[1]).join(" / ")), Tx(r.note),
-      r.geo ? {v: +r.geo.lat.toFixed(6), t: "n"} : null, r.geo ? {v: +r.geo.lon.toFixed(6), t: "n"} : null, Tx(r.cut ? "Yarıda kesildi" : r.bcc ? "BCC doğru" : "BCC hatalı"), Tx(r.demo ? "Evet" : "")]);
+      r.geo ? {v: +r.geo.lat.toFixed(6), t: "n"} : null, r.geo ? {v: +r.geo.lon.toFixed(6), t: "n"} : null, Tx(r.cut ? "Yarıda kesildi" : r.bcc ? "BCC doğru" : "BCC hatalı"), Tx(r.demo ? "Evet" : ""),
+      ...(L => L ? [...L.V, ...L.I, ...L.pf, L.f, L.P].map(Nm) : Array(11).fill(null))(liveVals(it))]);
   }
   const rows2 = [["Tarih", "Seri no", "İstasyon", "OBIS kodu", "Açıklama", "Değer"].map(H)];
   for (const r of rs) { const st = STATIONS.find(s => s.id === r.stationId); for (const [k, v] of (r.items || []).filter(x => !isEmptyHist(x))) rows2.push([Dt(r.ts), Tx(r.serial), Tx(st ? st.name : ""), Tx(k), Tx(obisDesc(k)), Tx(v)]); }
@@ -1805,7 +1858,7 @@ function buildXlsx(rs) {
   for (const s of STATIONS) { const l = limitsFor(s); rows3.push([Tx(s.name), Tx(s.sub), Tx(s.serial), s.kva ? {v: +s.kva, t: "n"} : null, {v: l.ind, t: "n"}, {v: l.cap, t: "n"}, Tx(s.note)]); }
   const enc = new TextEncoder();
   const ns = 'xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"';
-  const sheets = [["Okumalar", sheetXml(rows, [17, 18, 12, 12, 24, 11, 16, 14, 14, 14, 16, 16, 14, 16, 14, 15, 15, 12, 12, 11, 11, 16, 50, 30, 11, 11, 12, 7])],
+  const sheets = [["Okumalar", sheetXml(rows, [17, 18, 12, 12, 24, 11, 16, 14, 14, 14, 16, 16, 14, 16, 14, 15, 15, 12, 12, 11, 11, 16, 50, 30, 11, 11, 12, 7, 8, 8, 8, 8, 8, 8, 9, 9, 9, 10, 14])],
     ["Aylık geçmiş", sheetXml(rowsH, [18, 12, 17, 14, 10, 12, 14, 14, 13, 13, 12, 12, 16])],
     ["Tüm OBIS", sheetXml(rows2, [17, 12, 18, 12, 44, 30])], ["İstasyonlar", sheetXml(rows3, [22, 14, 14, 14, 14, 14, 40])]];
   const files = [
