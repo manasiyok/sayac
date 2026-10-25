@@ -18,7 +18,7 @@
   color-scheme:light;
 }
 @media (prefers-color-scheme:dark){
-  :root:not([data-theme="light"]):not([data-theme="soft"]){
+  :root:not([data-theme="light"]):not([data-theme="soft"]):not([data-theme="glass"]){
     --bg:#0e161e; --surface:#16212b; --surface2:#1c2935; --ink:#e7eef4; --muted:#a3b1bd; --line:#2c3a47;
     --accent:#5aa9ec; --accent-ink:#06192a; --accent-soft:#183247;
     --ok:#56c37a; --ok-soft:#163223; --warn:#f0a93a; --warn-soft:#3a2a10; --bad:#ff7a6b; --bad-soft:#3d1a16;
@@ -264,6 +264,26 @@ nav.tabs .center span.ic{width:48px;height:48px;border-radius:16px;background:va
 #bgVeil{background:var(--bg)}
 html.has-bg #bgLayer,html.has-bg #bgVeil{display:block}
 html.has-bg body{background:transparent!important}
+
+/* Şeffaf tema: koyu buzlu cam; arka plan resmi kartların arkasından görünür */
+:root[data-theme="glass"]{
+  --bg:#120a24; --surface:rgba(22,12,44,.46); --surface2:rgba(255,255,255,.09); --ink:#f3eeff; --muted:#cfc3ee; --line:rgba(255,255,255,.16);
+  --accent:#b9a2ff; --accent-ink:#160b2e; --accent-soft:rgba(185,162,255,.18);
+  --ok:#86e8b0; --ok-soft:rgba(70,190,130,.30); --warn:#ffc978; --warn-soft:rgba(240,170,60,.30); --bad:#ff958a; --bad-soft:rgba(240,90,80,.32);
+  --shadow:0 8px 24px rgba(0,0,0,.25); color-scheme:dark;
+}
+:root[data-theme="glass"] body{background:linear-gradient(170deg,#1a0f33 0%,#2a1650 55%,#3d2370 100%) fixed}
+:root[data-theme="glass"] .card,:root[data-theme="glass"] .tile,:root[data-theme="glass"] .hero{backdrop-filter:blur(10px) saturate(130%);-webkit-backdrop-filter:blur(10px) saturate(130%)}
+:root[data-theme="glass"] .card{border-color:rgba(255,255,255,.12)}
+:root[data-theme="glass"] .top,:root[data-theme="glass"] nav.tabs{background:rgba(18,10,36,.55);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border-color:rgba(255,255,255,.1)}
+:root[data-theme="glass"] nav.tabs .center span.ic{border-color:rgba(18,10,36,.9)}
+:root[data-theme="glass"] .sheet>div{background:#1d1238}
+:root[data-theme="glass"] .i,:root[data-theme="glass"] select,:root[data-theme="glass"] textarea{background:rgba(255,255,255,.08);color:var(--ink)}
+:root[data-theme="glass"] .tile-ic{background:rgba(255,255,255,.14)}
+:root[data-theme="glass"] .rb{background:#f3eeff;color:#1a0f33}
+:root[data-theme="glass"] .card h2,:root[data-theme="glass"] .card h3,:root[data-theme="glass"] .tile-name{text-shadow:0 1px 2px rgba(0,0,0,.35)}
+#sTheme{grid-auto-flow:row;grid-template-columns:repeat(auto-fit,minmax(88px,1fr))}
+:root[data-theme="glass"] .toast{background:rgba(29,18,56,.88);color:var(--ink);border:1px solid var(--line);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
 </style>
 </head>
 <body>
@@ -408,7 +428,7 @@ html.has-bg body{background:transparent!important}
       <h2>Görünüm ve deneme</h2>
       <div>
         <label class="f">Tema</label>
-        <div class="seg" id="sTheme"><button data-t="auto">Otomatik</button><button data-t="light">Açık</button><button data-t="dark">Koyu</button><button data-t="soft">Yumuşak</button></div>
+        <div class="seg" id="sTheme"><button data-t="auto">Otomatik</button><button data-t="light">Açık</button><button data-t="dark">Koyu</button><button data-t="soft">Yumuşak</button><button data-t="glass">Şeffaf</button></div>
       </div>
       <div class="stack" style="gap:8px">
         <span class="small muted">Arka plan resmi</span>
@@ -442,7 +462,7 @@ html.has-bg body{background:transparent!important}
 
 <script>
 "use strict";
-const APP_VERSION = "2.0";
+const APP_VERSION = "2.1";
 
 /* =====================================================================
    Yardımcılar
