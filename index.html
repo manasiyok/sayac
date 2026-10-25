@@ -18,7 +18,7 @@
   color-scheme:light;
 }
 @media (prefers-color-scheme:dark){
-  :root:not([data-theme="light"]){
+  :root:not([data-theme="light"]):not([data-theme="soft"]){
     --bg:#0e161e; --surface:#16212b; --surface2:#1c2935; --ink:#e7eef4; --muted:#a3b1bd; --line:#2c3a47;
     --accent:#5aa9ec; --accent-ink:#06192a; --accent-soft:#183247;
     --ok:#56c37a; --ok-soft:#163223; --warn:#f0a93a; --warn-soft:#3a2a10; --bad:#ff7a6b; --bad-soft:#3d1a16;
@@ -211,6 +211,52 @@ nav.tabs .center span.ic{width:48px;height:48px;border-radius:16px;background:va
 .ytot-g>div{display:grid;gap:2px;min-width:0;align-content:start}
 .ytot-g .k{font-size:12px;color:var(--muted)}
 .ytot-g .v{font-weight:700;font-size:17px}
+
+/* Yumuşak tema: ofiste rapora bakarken. Sahada yüksek kontrastlı Açık/Koyu önerilir. */
+:root[data-theme="soft"]{
+  --bg:#dfe3f3; --surface:rgba(255,255,255,.62); --surface2:rgba(255,255,255,.55); --ink:#1d2236; --muted:#4a5170; --line:rgba(70,80,130,.18);
+  --accent:#3b4a9c; --accent-ink:#ffffff; --accent-soft:rgba(59,74,156,.12);
+  --ok:#2e7d4f; --ok-soft:rgba(120,170,140,.55); --warn:#9a5b00; --warn-soft:rgba(240,190,120,.55); --bad:#b3261e; --bad-soft:rgba(235,150,140,.55);
+  --shadow:0 6px 18px rgba(60,70,120,.12); color-scheme:light;
+}
+:root[data-theme="soft"] body{background:linear-gradient(160deg,#eef0f8 0%,#d9def4 45%,#c9cdee 75%,#b9bde8 100%) fixed}
+:root[data-theme="soft"] .card,:root[data-theme="soft"] .tile{backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
+:root[data-theme="soft"] .card{border-color:transparent}
+:root[data-theme="soft"] .top,:root[data-theme="soft"] nav.tabs{background:rgba(238,240,250,.9);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px)}
+:root[data-theme="soft"] nav.tabs .center span.ic{border-color:#e6e8f6}
+:root[data-theme="soft"] .sheet>div{background:#f3f4fb}
+
+
+/* İstasyon panosu */
+.hero{display:grid;gap:10px;padding:16px;border-radius:var(--r-lg);background:var(--surface);box-shadow:var(--shadow);border:1px solid var(--line)}
+.hero-top{display:flex;align-items:center;gap:12px}
+.hero-ic{width:46px;height:46px;border-radius:50%;display:grid;place-items:center;background:var(--accent-soft);color:var(--accent);flex:none}
+.hero-t{font-size:20px;font-weight:800;letter-spacing:.01em}
+.hero-nums{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.hn{display:grid;gap:0;text-align:center;padding:8px 4px;border-radius:var(--r-md);background:var(--surface2);border:none;font:inherit;color:inherit;cursor:pointer}
+.hn b{font-size:22px;line-height:1.1;font-variant-numeric:tabular-nums}
+.hn span{font-size:11.5px;color:var(--muted)}
+.hn[aria-pressed="true"]{outline:2px solid var(--ink)}
+.hn.over b{color:var(--bad)} .hn.near b{color:var(--warn)} .hn.ok b{color:var(--ok)}
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(158px,1fr));gap:12px}
+.tile{position:relative;display:grid;grid-template-rows:auto 1fr auto;gap:8px;min-height:176px;padding:14px;border-radius:24px;
+  background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);cursor:pointer;text-align:left;color:var(--ink);min-width:0}
+.tile:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.tile.s-ok{background:var(--ok-soft)} .tile.s-near{background:var(--warn-soft)}
+.tile.s-over{background:var(--bad-soft);border:2px solid var(--bad)}
+.tile-top{display:flex;gap:10px;align-items:flex-start;min-width:0}
+.tile-ic{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;background:var(--surface);color:var(--ink);flex:none}
+.tile-name{font-weight:800;font-size:15.5px;line-height:1.2;overflow-wrap:anywhere}
+.tile-sub{font-size:12.5px;color:var(--muted);font-variant-numeric:tabular-nums}
+.tile-r{display:flex;gap:10px;font-variant-numeric:tabular-nums;font-size:13px}
+.tile-r b{font-size:17px}
+.tile svg.sp{width:100%;height:30px;display:block}
+.tile-bot{display:flex;align-items:center;gap:8px}
+.tile-pill{font-size:12px;font-weight:700;padding:3px 9px;border-radius:999px;background:var(--surface);white-space:nowrap}
+.s-over .tile-pill{background:var(--bad);color:#fff} .s-near .tile-pill{background:var(--warn);color:#fff} .s-ok .tile-pill{background:var(--ok);color:#fff}
+.rb{width:42px;height:42px;border-radius:50%;border:none;display:grid;place-items:center;background:var(--ink);color:var(--surface);cursor:pointer;flex:none}
+:root[data-theme="soft"] .rb{color:#fff}
+.rb:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 </style>
 </head>
 <body>
@@ -229,14 +275,8 @@ nav.tabs .center span.ic{width:48px;height:48px;border-radius:16px;background:va
       <input class="i grow" id="stSearch" type="search" placeholder="İstasyon, abone veya seri no ara" aria-label="İstasyon ara">
       <button class="btn primary" id="stAdd" aria-label="İstasyon ekle"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>Ekle</button>
     </div>
-    <div class="chips" role="group" aria-label="Duruma göre süz">
-      <button class="chip" data-f="all" aria-pressed="true">Tümü</button>
-      <button class="chip" data-f="over" aria-pressed="false">Ceza riski</button>
-      <button class="chip" data-f="near" aria-pressed="false">Yaklaşıyor</button>
-      <button class="chip" data-f="ok" aria-pressed="false">Normal</button>
-      <button class="chip" data-f="old" aria-pressed="false">7 günden eski</button>
-    </div>
-    <div id="stList" class="stack"></div>
+    <div id="stHero"></div>
+    <div id="stList" class="tiles"></div>
   </section>
 
   <!-- İSTASYON DETAYI -->
@@ -352,7 +392,7 @@ nav.tabs .center span.ic{width:48px;height:48px;border-radius:16px;background:va
       <h2>Görünüm ve deneme</h2>
       <div>
         <label class="f">Tema</label>
-        <div class="seg" id="sTheme"><button data-t="auto">Otomatik</button><button data-t="light">Açık</button><button data-t="dark">Koyu</button></div>
+        <div class="seg" id="sTheme"><button data-t="auto">Otomatik</button><button data-t="light">Açık</button><button data-t="dark">Koyu</button><button data-t="soft">Yumuşak</button></div>
       </div>
       <label class="row"><input type="checkbox" id="sAwake"> <span class="grow">Kutu bağlıyken ekranı açık tut<br><span class="small muted">Ekran kilitlenince iOS Bluetooth bağlantısını keser. Pil tüketimini biraz artırır.</span></span></label>
       <label class="row"><input type="checkbox" id="sDemo"> <span class="grow">Demo modu<br><span class="small muted">Gerçek kutu yerine sahte bir sayaçla çalışır. Kayıtlar "Demo" olarak işaretlenir.</span></span></label>
@@ -380,7 +420,7 @@ nav.tabs .center span.ic{width:48px;height:48px;border-radius:16px;background:va
 
 <script>
 "use strict";
-const APP_VERSION = "1.5";
+const APP_VERSION = "1.6";
 
 /* =====================================================================
    Yardımcılar
@@ -867,13 +907,44 @@ function renderView(v) {
    ===================================================================== */
 let stFilter = "all";
 const latestFor = st => READINGS.find(r => r.stationId === st.id) || null;
+const ICO = {
+  down: `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3c3 4 5 6.5 5 9a5 5 0 0 1-10 0c0-2.5 2-5 5-9z"/><path d="M12 10v6M9.5 13.5 12 16l2.5-2.5"/></svg>`,
+  up: `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16"/><path d="M8 20V9h8v11"/><path d="M12 3v9M9 6l3-3 3 3"/></svg>`,
+  bolt: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg>`,
+  grid: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 12h4l3-7 4 14 3-7h4"/></svg>`
+};
+const stIcon = st => /dal[gğ]/i.test(st.name) ? ICO.down : /terfi|hidrofor|booster/i.test(st.name) ? ICO.up : ICO.bolt;
+// Son 12 dönemin endüktif/kapasitif seyri (küçük çizgi)
+function sparkSvg(r, lim) {
+  const H = r ? monthlyHistory(r.items || []).slice().reverse() : [];
+  if (H.length < 3) return "";
+  const vals = H.flatMap(h => [h.ind, h.cap]).filter(v => v != null);
+  const max = Math.max(lim.ind, lim.cap, ...vals) * 1.05 || 1;
+  const W = 140, Hh = 30, x = i => 2 + i * (W - 4) / (H.length - 1), y = v => Hh - 2 - v / max * (Hh - 4);
+  const line = (k, c) => { const pts = H.map((h, i) => h[k] == null ? null : `${x(i).toFixed(1)},${y(h[k]).toFixed(1)}`).filter(Boolean);
+    return pts.length > 1 ? `<polyline points="${pts.join(" ")}" fill="none" stroke="${c}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>` : ""; };
+  return `<svg class="sp" viewBox="0 0 ${W} ${Hh}" preserveAspectRatio="none" aria-hidden="true">
+    <line x1="0" x2="${W}" y1="${y(lim.cap).toFixed(1)}" y2="${y(lim.cap).toFixed(1)}" stroke="var(--warn)" stroke-width="1" stroke-dasharray="3 3" opacity=".7"/>
+    ${line("ind", "var(--accent)")}${line("cap", "var(--warn)")}</svg>`;
+}
+const agoText = ts => { const d = daysAgo(ts); return d < 1 ? "bugün" : d < 2 ? "dün" : d < 30 ? `${Math.floor(d)} gün önce` : fmtDay(ts); };
 function renderStations() {
   const q = $("#stSearch").value.trim().toLocaleLowerCase("tr");
-  const rows = STATIONS.map(st => {
-    const r = latestFor(st);
-    const E = r ? evalReading(r) : null;
-    return {st, r, E, status: E ? E.overall : "na"};
-  }).filter(x => {
+  const all = STATIONS.map(st => { const r = latestFor(st); const E = r ? evalReading(r) : null; return {st, r, E, status: E ? E.overall : "na"}; });
+  const cnt = {over: 0, near: 0, ok: 0, old: 0};
+  all.forEach(x => { if (cnt[x.status] != null) cnt[x.status]++; if (!x.r || daysAgo(x.r.ts) > 7) cnt.old++; });
+  const now = new Date();
+  const conn = Dev.connected ? (Dev.kind === "demo" ? "Demo kutu bağlı" : "Kutu bağlı") : "Kutu bağlı değil";
+  $("#stHero").innerHTML = STATIONS.length ? `<div class="hero">
+    <div class="hero-top"><span class="hero-ic">${ICO.grid}</span><div class="grow"><div class="hero-t">${STATIONS.length} istasyon</div>
+      <div class="small muted">${now.getDate()} ${AYLAR[now.getMonth()]} ${["Pazar","Pazartesi","Salı","Çarşamba","Perşembe","Cuma","Cumartesi"][now.getDay()]} · ${conn}</div></div></div>
+    <div class="hero-nums" role="group" aria-label="Duruma göre süz">
+      ${[["over", "Ceza riski"], ["near", "Yaklaşıyor"], ["ok", "Normal"], ["old", "7+ gün"]].map(([k, t]) =>
+        `<button class="hn ${k}" data-f="${k}" aria-pressed="${stFilter === k}"><b>${cnt[k]}</b><span>${t}</span></button>`).join("")}
+    </div></div>` : "";
+  $$("#stHero .hn").forEach(b => b.onclick = () => { stFilter = stFilter === b.dataset.f ? "all" : b.dataset.f; renderStations(); });
+
+  const rows = all.filter(x => {
     if (q && !`${x.st.name} ${x.st.serial} ${x.st.sub || ""}`.toLocaleLowerCase("tr").includes(q)) return false;
     if (stFilter === "all") return true;
     if (stFilter === "old") return !x.r || daysAgo(x.r.ts) > 7;
@@ -881,24 +952,32 @@ function renderStations() {
   }).sort((a, b) => { const o = {over: 0, near: 1, ok: 2, none: 3, na: 4}; return (o[a.status] - o[b.status]) || a.st.name.localeCompare(b.st.name, "tr"); });
 
   if (!STATIONS.length) {
-    $("#stList").innerHTML = `<div class="card empty"><p><b>Henüz istasyon yok.</b></p><p class="small">İstasyon ekleyin ya da doğrudan okuma yapın; okunan sayaç için istasyon oluşturmanız önerilir.</p>
+    $("#stList").innerHTML = `<div class="card empty" style="grid-column:1/-1"><p><b>Henüz istasyon yok.</b></p><p class="small">İstasyon ekleyin ya da doğrudan okuma yapın; okunan sayaç için istasyon oluşturmanız önerilir.</p>
       <div class="row" style="margin-top:14px"><button class="btn grow" id="eAdd">İstasyon ekle</button><button class="btn primary grow" id="eRead">Okumaya geç</button></div></div>`;
     $("#eAdd").onclick = () => editStation(); $("#eRead").onclick = () => show("read"); return;
   }
-  if (!rows.length) { $("#stList").innerHTML = `<div class="card empty"><p>Bu süzgece uyan istasyon yok.</p></div>`; return; }
+  if (!rows.length) { $("#stList").innerHTML = `<div class="card empty" style="grid-column:1/-1"><p>Bu süzgece uyan istasyon yok.</p></div>`; return; }
   $("#stList").innerHTML = rows.map(({st, r, E, status}) => {
-    const ratioBox = (name, v, s) => `<div class="st-ratio"><span class="small muted">${name}</span><div class="v num t-${s}">${E && E.R.hasReactive ? pct(v) : "—"}</div></div>`;
-    return `<button class="card st" data-id="${esc(st.id)}">
-      <div class="st-head"><div class="grow"><div class="st-name">${esc(st.name)}</div>
-        <div class="small muted num">Seri ${esc(st.serial || "—")}${st.kva ? `, ${esc(st.kva)} kVA` : ""}</div></div>${r ? badge(status) : `<span class="badge b-na">Okunmadı</span>`}</div>
-      ${r ? `<div class="st-ratios">${ratioBox(`Endüktif (sınır %${E.lim.ind})`, E.R.ind, E.sInd)}${ratioBox(`Kapasitif (sınır %${E.lim.cap})`, E.R.cap, E.sCap)}</div>` : ""}
-      <div class="st-foot">${r ? `Son okuma ${fmtDate(r.ts)}${E.basis === "last" ? ", oran son okumadan bu yana" : ""}${daysAgo(r.ts) > 7 ? " — 7 günden eski" : ""}` : "Henüz okuma yok"}</div>
-    </button>`;
+    const has = r && E.R.hasReactive && (E.R.ind != null || E.R.cap != null);
+    const pill = !r ? "Okunmadı" : STATUS_TEXT[status];
+    return `<div class="tile s-${status}" role="button" tabindex="0" data-id="${esc(st.id)}" aria-label="${esc(st.name)}, ${esc(pill)}">
+      <div class="tile-top"><span class="tile-ic">${stIcon(st)}</span><div class="grow" style="min-width:0">
+        <div class="tile-name">${esc(st.name)}</div>
+        <div class="tile-sub">${r ? agoText(r.ts) : "henüz okuma yok"}${st.kva ? ` · ${esc(st.kva)} kVA` : ""}</div></div></div>
+      <div style="display:grid;gap:4px;align-content:end">
+        ${has ? `<div class="tile-r"><span>End <b class="t-${E.sInd}">${pct(E.R.ind)}</b></span><span>Kap <b class="t-${E.sCap}">${pct(E.R.cap)}</b></span></div>` : ""}
+        ${r ? sparkSvg(r, E.lim) : ""}
+      </div>
+      <div class="tile-bot"><span class="tile-pill">${esc(pill)}</span><span class="grow"></span>
+        <button class="rb" data-read="${esc(st.id)}" aria-label="${esc(st.name)} oku">${ICO.bolt}</button></div>
+    </div>`;
   }).join("");
-  $$("#stList .st").forEach(b => b.onclick = () => openStation(b.dataset.id));
+  $$("#stList .tile").forEach(t => { const open = () => openStation(t.dataset.id);
+    t.onclick = e => { if (e.target.closest(".rb")) return; open(); };
+    t.onkeydown = e => { if ((e.key === "Enter" || e.key === " ") && e.target === t) { e.preventDefault(); open(); } }; });
+  $$("#stList .rb").forEach(b => b.onclick = e => { e.stopPropagation(); show("read"); $("#rdStation").value = b.dataset.read; });
 }
 $("#stSearch").oninput = renderStations;
-$$(".chips .chip").forEach(c => c.onclick = () => { stFilter = c.dataset.f; $$(".chips .chip").forEach(x => x.setAttribute("aria-pressed", x === c)); renderStations(); });
 $("#stAdd").onclick = () => editStation();
 
 async function editStation(st, preset) {
@@ -1010,6 +1089,7 @@ function renderRead() {
 $$("#rdMode button").forEach(b => b.onclick = () => { readMode = b.dataset.m; S.lastMode = readMode; saveSettings(); renderRead(); });
 
 function updateConn() {
+  if (!$("#v-stations").classList.contains("hidden") && typeof renderStations === "function") setTimeout(renderStations, 0);
   const pill = $("#connPill"), t = $("#connText");
   pill.className = "pill";
   if (reading) { pill.classList.add("busy"); t.textContent = "Okunuyor"; }
