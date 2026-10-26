@@ -466,7 +466,7 @@ html.has-bg body{background:transparent!important}
 
 <script>
 "use strict";
-const APP_VERSION = "2.1.1";
+const APP_VERSION = "2.2";
 
 /* =====================================================================
    Yardımcılar
@@ -1316,7 +1316,9 @@ function readFail(title, msg) {
 async function onResult(j) {
   const part = toPart(j);
   partial = partial ? mergeParts(partial, part) : part;
-  const gotFull = /^Tam/.test(part.mode);          // kutu Tam okumaya geçtiyse geçmiş adımına gerek yok
+  // Kutu Tam okumaya geçtiyse ve Tam veride geçmiş (*1, *2...) varsa ikinci adıma gerek yok.
+  // Bazı sayaçların (ör. Luna LSM35) Tam listesi kısa ve geçmiş içermez; o zaman Geçmiş (7) de okunur.
+  const gotFull = /^Tam/.test(part.mode) && part.items.some(x => /\*\d+$/.test(String(x[0])));
   if (seqIdx < seq.length - 1 && !gotFull) {
     seqIdx++; setSteps(1);
     $("#rdDetail").textContent = stepTag() + "sayaçla yeni oturum açılıyor...";
